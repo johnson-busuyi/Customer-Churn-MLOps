@@ -43,6 +43,11 @@ jobs:
       - name: Build Docker image
         run: docker build -t customer-churn-api:latest .
 
+      - name: Verify package versions inside Docker image
+        run: |
+          docker run --rm customer-churn-api:latest python -c "import msgpack, urllib3, setuptools; print('msgpack:', msgpack.__version__); print('urllib3:', urllib3.__version__); print('setuptools:', setuptools.__version__)"
+          docker run --rm customer-churn-api:latest python -m pip show msgpack urllib3 setuptools
+
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
