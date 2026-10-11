@@ -1,0 +1,16 @@
+age,monthly_charges,tenure_months,support_calls,contract_type,churn
+25,85,3,5,monthly,yes
+42,55,36,1,yearly,no
+31,95,6,4,monthly,yes
+55,45,60,0,yearly,no
+28,75,8,3,monthly,yes
+48,60,48,1,yearly,no
+35,90,12,4,monthly,yes
+52,50,54,0,yearly,no
+23,80,2,6,monthly,yes
+46,65,40,1,yearly,no
+39,70,24,2,yearly,no
+29,88,5,5,monthly,yes
+58,42,72,0,yearly,no
+33,92,7,4,monthly,yes
+44,62,30,2,yearly,no
