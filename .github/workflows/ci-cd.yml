@@ -42,3 +42,13 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t customer-churn-api:latest .
+
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "customer-churn-api:latest"
+          format: "table"
+          severity: "CRITICAL,HIGH"
+          exit-code: "1"
+          ignore-unfixed: true
+
