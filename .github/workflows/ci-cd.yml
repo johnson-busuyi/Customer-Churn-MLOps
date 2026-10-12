@@ -64,3 +64,13 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Tag Docker image
+        run: |
+          docker tag customer-churn-api:latest ${{ secrets.DOCKERHUB_USERNAME }}/customer-churn-mlops:latest
+          docker tag customer-churn-api:latest ${{ secrets.DOCKERHUB_USERNAME }}/customer-churn-mlops:${{ github.sha }}
+
+      - name: Push Docker image to Docker Hub
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/customer-churn-mlops:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/customer-churn-mlops:${{ github.sha }}
