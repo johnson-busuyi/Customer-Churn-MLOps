@@ -7,16 +7,16 @@ WORKDIR /app
 # Copy dependency list first
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel \
+# Install dependencies and security-fixed packages in one image layer
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel msgpack urllib3 \
     && python -m pip install --no-cache-dir -r requirements.txt \
-    && python -m pip install --no-cache-dir --upgrade msgpack urllib3 setuptools
-
+    && python -m pip install --no-cache-dir --upgrade setuptools msgpack urllib3 \
+    && python -m pip check
 
 # Copy application source code
 COPY src/ ./src/
 
-# Copy trained model artifact
+# Copy trained model artifacts
 COPY models/ ./models/
 
 # Expose the FastAPI port

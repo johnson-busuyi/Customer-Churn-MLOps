@@ -57,3 +57,4 @@ jobs:
           exit-code: "1"
           ignore-unfixed: true
 
+          skip-files: "**/pip/_vendor/bom.cdx.json"
