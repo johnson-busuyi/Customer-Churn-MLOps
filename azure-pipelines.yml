@@ -14,8 +14,14 @@ pool:
   name: 'CartFlow-Agent-pool'
 
 variables:
-  IMAGE_NAME: 'customer-churn-api'
-  DOCKER_REPO: 'customer-churn-mlops'
+
+  - group: customer-churn-secrets
+
+  - name: IMAGE_NAME
+    value: 'customer-churn-api'
+
+  - name: DOCKER_REPO
+    value: 'customer-churn-mlops'
 
 stages:
 
