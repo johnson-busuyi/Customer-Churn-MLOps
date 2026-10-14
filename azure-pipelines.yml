@@ -1,0 +1,89 @@
+name: Customer-Churn-MLOps-CI-$(Build.BuildId)
+
+trigger:
+  branches:
+    include:
+      - main
+
+pr:
+  branches:
+    include:
+      - main
+
+pool:
+  name: 'CartFlow-Agent-pool'
+
+variables:
+  IMAGE_NAME: 'customer-churn-api'
+  DOCKER_REPO: 'customer-churn-mlops'
+
+stages:
+
+  # STAGE 1: PYTHON TESTING
+  - stage: Test
+    displayName: 'Python Application Testing'
+    jobs:
+      - job: Pytest
+        displayName: 'Run Python Tests'
+        steps:
+          - checkout: self
+
+          - script: |
+              python3 --version
+              python3 -m venv "$(Agent.TempDirectory)/churn-venv"
+              "$(Agent.TempDirectory)/churn-venv/bin/python" -m pip install --upgrade pip
+              "$(Agent.TempDirectory)/churn-venv/bin/python" -m pip install -r requirements.txt
+              "$(Agent.TempDirectory)/churn-venv/bin/python" -m pytest -v
+            displayName: 'Install Dependencies and Run Pytest'
+
+  # STAGE 2: DOCKER BUILD AND SECURITY
+  - stage: Docker
+    displayName: 'Docker Build and Security Scan'
+    dependsOn: Test
+    condition: succeeded()
+    jobs:
+      - job: BuildScanPush
+        displayName: 'Build, Scan and Publish'
+        steps:
+          - checkout: self
+
+          - script: |
+              docker build -t $(IMAGE_NAME):latest .
+            displayName: 'Build Docker Image'
+
+          - script: |
+              docker run --rm $(IMAGE_NAME):latest python -c "import msgpack, urllib3, setuptools; print('msgpack:', msgpack.__version__); print('urllib3:', urllib3.__version__); print('setuptools:', setuptools.__version__)"
+              docker run --rm $(IMAGE_NAME):latest python -m pip show msgpack urllib3 setuptools
+            displayName: 'Verify Package Versions'
+
+          - script: |
+              trivy image \
+                --format table \
+                --severity CRITICAL,HIGH \
+                --exit-code 1 \
+                --ignore-unfixed \
+                --skip-files "**/pip/_vendor/bom.cdx.json" \
+                $(IMAGE_NAME):latest
+            displayName: 'Trivy Security Scan'
+
+          - script: |
+              echo "$DOCKERHUB_TOKEN" | docker login \
+                -u "$DOCKERHUB_USERNAME" \
+                --password-stdin
+            displayName: 'Docker Hub Login'
+            env:
+              DOCKERHUB_USERNAME: $(DOCKERHUB_USERNAME)
+              DOCKERHUB_TOKEN: $(DOCKERHUB_TOKEN)
+
+          - script: |
+              docker tag $(IMAGE_NAME):latest \
+                "$DOCKERHUB_USERNAME/$(DOCKER_REPO):latest"
+
+              docker tag $(IMAGE_NAME):latest \
+                "$DOCKERHUB_USERNAME/$(DOCKER_REPO):$(Build.SourceVersion)"
+
+              docker push "$DOCKERHUB_USERNAME/$(DOCKER_REPO):latest"
+              docker push "$DOCKERHUB_USERNAME/$(DOCKER_REPO):$(Build.SourceVersion)"
+            displayName: 'Tag and Push Docker Images'
+            env:
+              DOCKERHUB_USERNAME: $(DOCKERHUB_USERNAME)
