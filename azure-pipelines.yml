@@ -3,7 +3,7 @@
 
 name: Customer-Churn-MLOps-CI-$(Build.BuildId)
 
-# Trigger pipeline when code is merged into main
+# Trigger CI when main changes
 trigger:
   branches:
     include:
@@ -29,10 +29,11 @@ variables:
   - name: DOCKER_REPO
     value: 'customer-churn-mlops'
 
-# ==========================================
-# STAGE 1 - PYTHON TESTING
-# ==========================================
 stages:
+
+  # ==========================================
+  # STAGE 1 - PYTHON TESTING
+  # ==========================================
   - stage: Test
     displayName: 'Python Application Testing'
 
@@ -107,8 +108,7 @@ stages:
 
             displayName: 'Trivy Security Scan'
 
-          # Authenticate with Docker Hub
-          # Only run when building main
+          # Docker Hub Login - main only
           - script: |
               set -e
 
@@ -128,7 +128,7 @@ stages:
               DOCKERHUB_USERNAME: $(DOCKERHUB_USERNAME)
               DOCKERHUB_TOKEN: $(DOCKERHUB_TOKEN)
 
-          # Publish Docker images
+          # Publish latest and commit SHA images
           - script: |
               set -e
 
@@ -158,18 +158,24 @@ stages:
               DOCKERHUB_USERNAME: $(DOCKERHUB_USERNAME)
 
   # ==========================================
-  # STAGE 3 - AUTOMATIC VERSIONING
+  # STAGE 3 - AUTOMATIC GIT AND DOCKER VERSIONING
   # ==========================================
   - stage: Version
     displayName: 'Automatic Git and Docker Versioning'
     dependsOn: Docker
 
-    # Do not create release tags during PR validation
+    # Run on main for manual or automatic CI builds
+    # Skip versioning during pull request validation
     condition: >
       and(
         succeeded(),
         eq(variables['Build.SourceBranch'], 'refs/heads/main'),
-        in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')
+        in(
+          variables['Build.Reason'],
+          'Manual',
+          'IndividualCI',
+          'BatchedCI'
+        )
       )
 
     jobs:
@@ -181,7 +187,7 @@ stages:
             persistCredentials: true
             fetchDepth: 0
 
-          # Create Git version tag
+          # STEP 1 - Create and push Git tag
           - script: |
               set -e
 
@@ -204,7 +210,7 @@ stages:
             env:
               GITHUB_TOKEN: $(GITHUB_TOKEN)
 
-          # Publish matching Docker version tag
+          # STEP 2 - Publish matching Docker version
           - script: |
               set -e
 
