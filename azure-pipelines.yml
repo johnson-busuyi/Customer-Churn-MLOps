@@ -1,3 +1,4 @@
+# CI/CD pipeline for Customer Churn MLOps
 name: Customer-Churn-MLOps-CI-$(Build.BuildId)
 
 trigger:
