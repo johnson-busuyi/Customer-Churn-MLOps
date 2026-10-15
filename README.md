@@ -1,3 +1,4 @@
+Testing automatic pull request merging.
 ## Azure DevOps Automation
 This project uses Azure DevOps for automated CI/CD testing.
 
