@@ -93,3 +93,43 @@ stages:
             displayName: 'Tag and Push Docker Images'
             env:
               DOCKERHUB_USERNAME: $(DOCKERHUB_USERNAME)
+
+  # STAGE 3: AUTOMATIC GIT VERSIONING
+  - stage: Version
+    displayName: 'Automatic Git Versioning'
+    dependsOn: Docker
+    condition: >
+      and(
+        succeeded(),
+        eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+        eq(variables['Build.Reason'], 'IndividualCI')
+      )
+
+    jobs:
+      - job: CreateGitTag
+        displayName: 'Create Version Tag'
+
+        steps:
+          - checkout: self
+            persistCredentials: true
+            fetchDepth: 0
+
+          - script: |
+              set -e
+
+              VERSION="v1.0.$(Build.BuildId)"
+
+              git config user.name "Azure DevOps"
+              git config user.email "azure-pipelines@users.noreply.github.com"
+
+              git tag -a "$VERSION" -m "Release $VERSION"
+              git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)" push origin "$VERSION"
+
+        
+
+              echo "Created Git tag: $VERSION"
+
+            displayName: 'Create and Push Git Tag'
+
+            env:
+              GITHUB_TOKEN: $(GITHUB_TOKEN)
