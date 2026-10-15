@@ -131,8 +131,7 @@ stages:
 
             displayName: 'Create and Push Git Tag'
            
-           env:
-
+        env:
           # NEW STEP: Docker Image Versioning
           - script: |
               set -e
