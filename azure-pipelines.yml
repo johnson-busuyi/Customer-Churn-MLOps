@@ -130,17 +130,8 @@ stages:
               echo "Created Git tag: $VERSION"
 
             displayName: 'Create and Push Git Tag'
-
-            env:
-              GITHUB_TOKEN: $(GITHUB_TOKEN)
-
-          - script: |
-              # Your existing Git versioning commands
-              VERSION="v1.0.$(Build.BuildId)"
-              # ... existing git commands ...
-            displayName: 'Create and Push Git Tag'
-            env:
-              GITHUB_TOKEN: $(GITHUB_TOKEN)
+           
+           env:
 
           # NEW STEP: Docker Image Versioning
           - script: |
