@@ -1,4 +1,5 @@
-## Customer Churn MLOps Pipeline ##
+## Azure DevOps Automation
+This project uses Azure DevOps for automated CI/CD testing.
 
 An end-to-end MLOps portfolio project that trains and evaluates customer-churn models, tracks experiments with MLflow, serves predictions through FastAPI, tests the application with Pytest, packages it with Docker, scans the container with Trivy, and uses GitHub Actions to publish validated images to Docker Hub.
 
