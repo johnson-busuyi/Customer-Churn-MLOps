@@ -133,3 +133,31 @@ stages:
 
             env:
               GITHUB_TOKEN: $(GITHUB_TOKEN)
+
+          - script: |
+              # Your existing Git versioning commands
+              VERSION="v1.0.$(Build.BuildId)"
+              # ... existing git commands ...
+            displayName: 'Create and Push Git Tag'
+            env:
+              GITHUB_TOKEN: $(GITHUB_TOKEN)
+
+          # NEW STEP: Docker Image Versioning
+          - script: |
+              set -e
+              VERSION="v1.0.$(Build.BuildId)"
+              IMAGE="$(DOCKERHUB_USERNAME)/$(DOCKER_REPO)"
+
+              echo "$DOCKERHUB_TOKEN" | docker login \
+                -u "$DOCKERHUB_USERNAME" --password-stdin
+
+              docker pull "$IMAGE:$(Build.SourceVersion)"
+              docker tag "$IMAGE:$(Build.SourceVersion)" "$IMAGE:$VERSION"
+              docker push "$IMAGE:$VERSION"
+              docker logout
+
+              echo "Published Docker image: $IMAGE:$VERSION"
+            displayName: 'Publish Versioned Docker Image'
+            env:
+              DOCKERHUB_USERNAME: $(DOCKERHUB_USERNAME)
+              DOCKERHUB_TOKEN: $(DOCKERHUB_TOKEN)
