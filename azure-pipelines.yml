@@ -123,8 +123,13 @@ stages:
               git config user.email "azure-pipelines@users.noreply.github.com"
 
               git tag -a "$VERSION" -m "Release $VERSION"
-              git push origin "$VERSION"
+              git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)" push origin "$VERSION"
+
+        
 
               echo "Created Git tag: $VERSION"
 
             displayName: 'Create and Push Git Tag'
+
+            env:
+              GITHUB_TOKEN: $(GITHUB_TOKEN)
