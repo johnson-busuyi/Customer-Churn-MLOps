@@ -1,20 +1,26 @@
+
+# Customer Churn MLOps - Azure DevOps CI/CD Pipeline
+
 name: Customer-Churn-MLOps-CI-$(Build.BuildId)
 
+# Trigger pipeline when code is merged into main
 trigger:
   branches:
     include:
       - main
 
+# Validate pull requests targeting main
 pr:
   branches:
     include:
       - main
 
+# Self-hosted Azure DevOps agent
 pool:
   name: 'CartFlow-Agent-pool'
 
+# Pipeline variables
 variables:
-
   - group: customer-churn-secrets
 
   - name: IMAGE_NAME
@@ -23,46 +29,74 @@ variables:
   - name: DOCKER_REPO
     value: 'customer-churn-mlops'
 
+# ==========================================
+# STAGE 1 - PYTHON TESTING
+# ==========================================
 stages:
-
-  # STAGE 1: PYTHON TESTING
   - stage: Test
     displayName: 'Python Application Testing'
+
     jobs:
       - job: Pytest
         displayName: 'Run Python Tests'
+
         steps:
           - checkout: self
 
           - script: |
+              set -e
+
               python3 --version
+
               python3 -m venv "$(Agent.TempDirectory)/churn-venv"
+
               "$(Agent.TempDirectory)/churn-venv/bin/python" -m pip install --upgrade pip
+
               "$(Agent.TempDirectory)/churn-venv/bin/python" -m pip install -r requirements.txt
+
               "$(Agent.TempDirectory)/churn-venv/bin/python" -m pytest -v
+
             displayName: 'Install Dependencies and Run Pytest'
 
-  # STAGE 2: DOCKER BUILD AND SECURITY
+  # ==========================================
+  # STAGE 2 - DOCKER BUILD AND SECURITY SCAN
+  # ==========================================
   - stage: Docker
     displayName: 'Docker Build and Security Scan'
     dependsOn: Test
     condition: succeeded()
+
     jobs:
       - job: BuildScanPush
-        displayName: 'Build, Scan and Publish'
+        displayName: 'Build, Scan and Publish Docker Image'
+
         steps:
           - checkout: self
 
+          # Build Docker image
           - script: |
+              set -e
+
               docker build -t $(IMAGE_NAME):latest .
+
             displayName: 'Build Docker Image'
 
+          # Verify installed package versions
           - script: |
-              docker run --rm $(IMAGE_NAME):latest python -c "import msgpack, urllib3, setuptools; print('msgpack:', msgpack.__version__); print('urllib3:', urllib3.__version__); print('setuptools:', setuptools.__version__)"
-              docker run --rm $(IMAGE_NAME):latest python -m pip show msgpack urllib3 setuptools
+              set -e
+
+              docker run --rm $(IMAGE_NAME):latest \
+                python -c "import msgpack, urllib3, setuptools; print('msgpack:', msgpack.__version__); print('urllib3:', urllib3.__version__); print('setuptools:', setuptools.__version__)"
+
+              docker run --rm $(IMAGE_NAME):latest \
+                python -m pip show msgpack urllib3 setuptools
+
             displayName: 'Verify Package Versions'
 
+          # Trivy security scan
           - script: |
+              set -e
+
               trivy image \
                 --format table \
                 --severity CRITICAL,HIGH \
@@ -70,50 +104,84 @@ stages:
                 --ignore-unfixed \
                 --skip-files "**/pip/_vendor/bom.cdx.json" \
                 $(IMAGE_NAME):latest
+
             displayName: 'Trivy Security Scan'
 
+          # Authenticate with Docker Hub
+          # Only run when building main
           - script: |
+              set -e
+
               echo "$DOCKERHUB_TOKEN" | docker login \
                 -u "$DOCKERHUB_USERNAME" \
                 --password-stdin
+
             displayName: 'Docker Hub Login'
+
+            condition: >
+              and(
+                succeeded(),
+                eq(variables['Build.SourceBranch'], 'refs/heads/main')
+              )
+
             env:
               DOCKERHUB_USERNAME: $(DOCKERHUB_USERNAME)
               DOCKERHUB_TOKEN: $(DOCKERHUB_TOKEN)
 
+          # Publish Docker images
           - script: |
-              docker tag $(IMAGE_NAME):latest \
-                "$DOCKERHUB_USERNAME/$(DOCKER_REPO):latest"
+              set -e
 
-              docker tag $(IMAGE_NAME):latest \
-                "$DOCKERHUB_USERNAME/$(DOCKER_REPO):$(Build.SourceVersion)"
+              IMAGE="$DOCKERHUB_USERNAME/$(DOCKER_REPO)"
 
-              docker push "$DOCKERHUB_USERNAME/$(DOCKER_REPO):latest"
-              docker push "$DOCKERHUB_USERNAME/$(DOCKER_REPO):$(Build.SourceVersion)"
+              docker tag $(IMAGE_NAME):latest "$IMAGE:latest"
+
+              docker tag $(IMAGE_NAME):latest "$IMAGE:$(Build.SourceVersion)"
+
+              docker push "$IMAGE:latest"
+
+              docker push "$IMAGE:$(Build.SourceVersion)"
+
+              docker logout
+
+              echo "Docker images published successfully"
+
             displayName: 'Tag and Push Docker Images'
+
+            condition: >
+              and(
+                succeeded(),
+                eq(variables['Build.SourceBranch'], 'refs/heads/main')
+              )
+
             env:
               DOCKERHUB_USERNAME: $(DOCKERHUB_USERNAME)
 
-  # STAGE 3: AUTOMATIC GIT VERSIONING
+  # ==========================================
+  # STAGE 3 - AUTOMATIC VERSIONING
+  # ==========================================
   - stage: Version
-    displayName: 'Automatic Git Versioning'
+    displayName: 'Automatic Git and Docker Versioning'
     dependsOn: Docker
+
+    # Do not create release tags during PR validation
     condition: >
       and(
         succeeded(),
         eq(variables['Build.SourceBranch'], 'refs/heads/main'),
-        eq(variables['Build.Reason'], 'IndividualCI')
+        in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')
       )
 
     jobs:
       - job: CreateGitTag
-        displayName: 'Create Version Tag'
+        displayName: 'Create Git and Docker Version Tags'
 
         steps:
           - checkout: self
             persistCredentials: true
             fetchDepth: 0
 
+          # Create Git version tag
           - script: |
               set -e
 
@@ -123,9 +191,11 @@ stages:
               git config user.email "azure-pipelines@users.noreply.github.com"
 
               git tag -a "$VERSION" -m "Release $VERSION"
-              git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)" push origin "$VERSION"
 
-        
+              AUTH_HEADER=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)
+
+              git -c http.extraheader="AUTHORIZATION: basic $AUTH_HEADER" \
+                push origin "$VERSION"
 
               echo "Created Git tag: $VERSION"
 
@@ -133,3 +203,31 @@ stages:
 
             env:
               GITHUB_TOKEN: $(GITHUB_TOKEN)
+
+          # Publish matching Docker version tag
+          - script: |
+              set -e
+
+              VERSION="v1.0.$(Build.BuildId)"
+
+              IMAGE="$DOCKERHUB_USERNAME/$(DOCKER_REPO)"
+
+              echo "$DOCKERHUB_TOKEN" | docker login \
+                -u "$DOCKERHUB_USERNAME" \
+                --password-stdin
+
+              docker pull "$IMAGE:$(Build.SourceVersion)"
+
+              docker tag "$IMAGE:$(Build.SourceVersion)" "$IMAGE:$VERSION"
+
+              docker push "$IMAGE:$VERSION"
+
+              docker logout
+
+              echo "Published Docker image: $IMAGE:$VERSION"
+
+            displayName: 'Publish Versioned Docker Image'
+
+            env:
+              DOCKERHUB_USERNAME: $(DOCKERHUB_USERNAME)
+              DOCKERHUB_TOKEN: $(DOCKERHUB_TOKEN)
